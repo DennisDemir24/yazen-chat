@@ -1,30 +1,19 @@
 import { StatusBar } from 'expo-status-bar';
 import { StyleSheet, Text, View } from 'react-native';
-import { createStackNavigator } from 'react-navigation-stack';
-import { createAppContainer } from 'react-navigation';
+import { NavigationContainer } from '@react-navigation/native';
+import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import JoinScreen from './screens/JoinScreen';
 
-const navigator = createStackNavigator(
-  {
-    JoinScreen: { screen: JoinScreen },
-  },
-  {
-    initialRouteName: 'JoinScreen',
-  }
-);
+const Stack = createNativeStackNavigator();
 
-
-const AppContainer = createAppContainer(navigator);
-
-export default function App() {
-  return <AppContainer />;
+const App = () => {
+  return (
+    <NavigationContainer>
+      <Stack.Navigator>
+        <Stack.Screen name="JoinScreen" component={JoinScreen} />
+      </Stack.Navigator>
+    </NavigationContainer>
+  );
 }
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#fff',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-});
+export default App;
