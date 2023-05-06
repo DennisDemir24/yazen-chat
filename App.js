@@ -10,7 +10,11 @@ const App = () => {
   return (
     <NavigationContainer>
       <Stack.Navigator>
-        <Stack.Screen name="JoinScreen" component={JoinScreen} />
+        <Stack.Screen name="JoinScreen" component={JoinScreen} options={
+          {
+            headerTitle: "Welcome to Yazen Chat"
+          }
+        } />
       </Stack.Navigator>
     </NavigationContainer>
   );
