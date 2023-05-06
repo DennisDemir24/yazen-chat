@@ -1,18 +1,17 @@
 import { View, Text, TextInput, TouchableOpacity, StyleSheet } from 'react-native';
-
-import { useState } from 'react'
+import React, { useState } from 'react'
 
 const JoinScreen = ({ navigation }) => {
     const [userName, setUserName] = useState('');
 
     const onPressJoin = () => {
-        /* navigation.navigate('ChatRoom', { userId: new Date().getTime(), userName }); */
-        console.log('onPressJoin')
+        navigation.navigate('ChatRoom', { userId: new Date().getTime(), userName });
     };
+
     return (
         <View style={styles.container}>
             <Text style={styles.title}>Join the Chat</Text>
-            <TextInput style={styles.nameInput} placeholder="Enter your name" onChangeText={setUserName} />
+            <TextInput style={styles.nameInput} placeholder="Enter your name" onChangeText={(userName) => setUserName(userName)} value={userName} />
             <TouchableOpacity style={styles.joinButton} onPress={onPressJoin}>
                 <Text style={styles.buttonText}>Join</Text>
             </TouchableOpacity>
