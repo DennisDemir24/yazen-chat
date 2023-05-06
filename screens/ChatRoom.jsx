@@ -3,29 +3,95 @@ import { View, Text, TextInput, TouchableOpacity, StyleSheet, ActivityIndicator,
 import { db } from '../config/firebaseConfig'
 import {
     collection, addDoc, onSnapshot, query, orderBy, limit,
-    startAfter, getDocs
+    startAfter, serverTimestamp
 } from 'firebase/firestore';
 
 const ChatRoom = ({ route }) => {
     const [messages, setMessages] = useState([]);
-    const [newMessage, setNewMessage] = useState('');
-    const [lastLoadedMessageTimestamp, setLastLoadedMessageTimestamp] = useState(null);
-
+    const [message, setMessage] = useState('');
+    const [isLoadingMore, setIsLoadingMore] = useState(false);
+    const [lastLoadedMessageTimestamp, setLastLoadedMessageTimestamp] = useState();
     const { userId, userName } = route.params;
+
+    console.log(messages.length);
 
     const flatListRef = useRef(null); // Create a ref for FlatList
 
+    // Query to fetch initial 25 messages in descending order of creation
+    const messageRef = collection(db, 'dennis-yazen-messages');
+    const q = query(
+        messageRef,
+        orderBy('timestamp', 'desc'),
+        limit(25)
+    );
+
+    // Listen for changes to the query and update messages state accordingly
     useEffect(() => {
-        const q = query(collection(db, 'dennis-yazen-messages'), orderBy('timestamp', 'asc'), limit(25));
         const unsubscribe = onSnapshot(q, (querySnapshot) => {
-            let messages = [];
+            const newMessages = [];
             querySnapshot.forEach((doc) => {
-                messages.push({ ...doc.data(), id: doc.id });
+                const message = doc.data();
+                newMessages.push({
+                    id: doc.id,
+                    text: message.text,
+                    userId: message.userId,
+                    userName: message.userName,
+                });
             });
-            setMessages(messages);
+            setMessages(newMessages.reverse());
         });
+
         return () => unsubscribe();
     }, []);
+
+    // Function to add a new message to the database and update messages state
+    const handleSend = async () => {
+        if (message.trim() !== '') {
+            await addDoc(messageRef, {
+                text: message,
+                timestamp: serverTimestamp(),
+                userName: userName,
+                userId: userId,
+            });
+
+            setMessage('');
+        }
+    };
+
+    const loadMoreMessages = async () => {
+        if (isLoadingMore) {
+          return;
+        }
+      
+        setIsLoadingMore(true);
+      
+        const q = query(
+          messageRef,
+          orderBy('timestamp', 'desc'),
+          lastLoadedMessageTimestamp ? startAfter(lastLoadedMessageTimestamp) : null
+        );
+      
+        console.log('Loading more messages'); // Add this line to see if the function is being called
+      
+        const unsubscribe = onSnapshot(q, (querySnapshot) => {
+          const newMessages = [];
+          querySnapshot.forEach((doc) => {
+            const message = doc.data();
+            newMessages.unshift({
+              id: doc.id,
+              text: message.text,
+              timestamp: serverTimestamp(),
+              userId: message.userId,
+              userName: message.userName,
+            });
+          });
+          setMessages((prevMessages) => [...newMessages, ...prevMessages]);
+          setLastLoadedMessageTimestamp(newMessages[newMessages.length - 1]?.timestamp);
+          setIsLoadingMore(false);
+        });
+      
+        return () => unsubscribe();
+      };
 
     useEffect(() => {
         if (messages.length > 0) {
@@ -33,57 +99,8 @@ const ChatRoom = ({ route }) => {
         }
     }, [messages]);
 
-    const handleSend = async () => {
-        if (newMessage.trim() === '') return;
-
-        await addDoc(collection(db, 'dennis-yazen-messages'), {
-            userId,
-            userName,
-            text: newMessage,
-            timestamp: new Date().getTime(),
-        });
-
-        setNewMessage('');
-
-        // Append the new message to the existing messages
-        setMessages([...messages, {
-            id: 'new-message-' + new Date().getTime(),
-            userId,
-            userName,
-            text: newMessage,
-            timestamp: new Date().getTime(),
-        }]);
-    };
-
-    const handleLoadMoreMessages = async () => {
-        if (lastLoadedMessageTimestamp === null) {
-          // This is the initial load, so the first query has already loaded the 25 most recent messages
-          return;
-        }
-      
-        const q = query(
-          collection(db, 'dennis-yazen-messages'),
-          orderBy('timestamp', 'desc'),
-          endBefore(lastLoadedMessageTimestamp),
-          limit(25)
-        );
-      
-        const querySnapshot = await getDocs(q);
-      
-        let messages = [];
-        querySnapshot.forEach((doc) => {
-          messages.push({ ...doc.data(), id: doc.id });
-        });
-      
-        // Append the older messages to the beginning of the messages array
-        setMessages([...messages, ...messages]);
-      
-        // Update the last loaded message's timestamp
-        setLastLoadedMessageTimestamp(messages[messages.length - 1].timestamp);
-      };
-
-
-    const renderItem = ({ item }) => (
+    const renderItem = ({ item }) => {
+        return (
         <View style={[
             styles.messageContainer,
             item.userId === userId ? styles.sentMessage : styles.receivedMessage,
@@ -91,32 +108,43 @@ const ChatRoom = ({ route }) => {
             <Text style={styles.messageAuthor}>{item.userName}</Text>
             <Text style={styles.messageText}>{item.text}</Text>
         </View>
-    );
+        )
+    };
 
     return (
         <View style={{ flex: 1 }}>
             <KeyboardAvoidingView style={styles.container} behavior="padding">
                 <SafeAreaView style={styles.header}>
-                    <Text style={styles.headerTitle}>Chat App</Text>
+                    <Text style={styles.headerTitle}>Yazen Chat</Text>
                 </SafeAreaView>
                 <FlatList
                     ref={flatListRef}
                     data={messages}
                     renderItem={renderItem}
-                    keyExtractor={(item, index) => item.id + "-" + index}
-                    onEndReached={
-                        handleLoadMoreMessages
-                    }
+                    keyExtractor={(item, index) => item.id + index}
+                    onScroll={e => {
+                        const scrolledToTop = e.nativeEvent.contentOffset.y === 0;
+                        if (scrolledToTop) {
+                            loadMoreMessages();
+                        }
+                    }}
                     onEndReachedThreshold={0.1}
                     onScrollToIndexFailed={
                         () => console.log("WARNING")
+                    }
+
+                    ListHeaderComponent={
+                        isLoadingMore ?
+                            <ActivityIndicator size="large" color="#FF581E" />
+                            :
+                            null
                     }
                 />
                 <SafeAreaView style={styles.footer}>
                     <TextInput
                         style={styles.input}
-                        value={newMessage}
-                        onChangeText={setNewMessage}
+                        value={message}
+                        onChangeText={setMessage}
                         placeholder="Type your message here"
                         onSubmitEditing={handleSend}
                         blurOnSubmit={false}
@@ -135,7 +163,7 @@ const styles = StyleSheet.create({
         flex: 1,
     },
     header: {
-        backgroundColor: '#2196F3',
+        backgroundColor: '#FF581E',
         padding: 16,
     },
     headerTitle: {
@@ -154,19 +182,19 @@ const styles = StyleSheet.create({
     input: {
         flex: 1,
         marginRight: 16,
-        padding: 8,
+        padding: 10,
         backgroundColor: '#f2f2f2',
         borderRadius: 16,
-        fontSize: 16, // font size of the text input
-        borderWidth: 1, // border width of the text input
-        borderColor: '#ccc', // border color of the text input
-        paddingLeft: 10, // left padding of the text input
-        paddingRight: 10, // right padding of the text input
-        paddingTop: 8, // top padding of the text input
-        paddingBottom: 8, // bottom padding of the text input
+        fontSize: 16,
+        borderWidth: 1,
+        borderColor: '#ccc',
+        paddingLeft: 10,
+        paddingRight: 10,
+        paddingTop: 8,
+        paddingBottom: 8,
     },
     sendButton: {
-        backgroundColor: 'black',
+        backgroundColor: '#FF581E',
         paddingHorizontal: 16,
         paddingVertical: 8,
         borderRadius: 16,
@@ -196,7 +224,7 @@ const styles = StyleSheet.create({
     },
     sentMessage: {
         alignSelf: 'flex-end',
-        backgroundColor: 'blue',
+        backgroundColor: '#FF581E',
     },
     receivedMessage: {
         alignSelf: 'flex-start',
