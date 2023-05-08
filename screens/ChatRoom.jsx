@@ -3,17 +3,15 @@ import { View, Text, TextInput, TouchableOpacity, StyleSheet, ActivityIndicator,
 import { db } from '../config/firebaseConfig'
 import {
     collection, addDoc, onSnapshot, query, orderBy, limit,
-    startAfter, serverTimestamp
+    startAfter, endBefore
 } from 'firebase/firestore';
 
 const ChatRoom = ({ route }) => {
     const [messages, setMessages] = useState([]);
     const [message, setMessage] = useState('');
     const [isLoadingMore, setIsLoadingMore] = useState(false);
-    const [lastLoadedMessageTimestamp, setLastLoadedMessageTimestamp] = useState();
+    const [lastLoadedMessageTimestamp, setLastLoadedMessageTimestamp] = useState(null);
     const { userId, userName } = route.params;
-
-    console.log(messages.length);
 
     const flatListRef = useRef(null); // Create a ref for FlatList
 
@@ -21,93 +19,106 @@ const ChatRoom = ({ route }) => {
     const messageRef = collection(db, 'dennis-yazen-messages');
     const q = query(
         messageRef,
-        orderBy('timestamp', 'desc'),
+        orderBy('createdAt', 'desc'),
         limit(25)
     );
 
     // Listen for changes to the query and update messages state accordingly
     useEffect(() => {
-        const unsubscribe = onSnapshot(q, (querySnapshot) => {
-            const newMessages = [];
-            querySnapshot.forEach((doc) => {
-                const message = doc.data();
-                newMessages.push({
-                    id: doc.id,
-                    text: message.text,
-                    userId: message.userId,
-                    userName: message.userName,
+        try {
+            const unsubscribe = onSnapshot(q, (querySnapshot) => {
+                const newMessages = [];
+                querySnapshot.forEach((doc) => {
+                    const message = doc.data();
+                    newMessages.push({
+                        id: doc.id,
+                        text: message.text,
+                        userId: message.userId,
+                        userName: message.userName,
+                        createdAt: message.createdAt
+                    });
                 });
+                setMessages(newMessages);
             });
-            setMessages(newMessages.reverse());
-        });
 
-        return () => unsubscribe();
+            return () => unsubscribe();
+        } catch (e) {
+            console.log("First useEffect", e);
+        }
     }, []);
 
     // Function to add a new message to the database and update messages state
     const handleSend = async () => {
         if (message.trim() !== '') {
-            await addDoc(messageRef, {
-                text: message,
-                timestamp: serverTimestamp(),
-                userName: userName,
-                userId: userId,
-            });
+            try {
+                await addDoc(messageRef, {
+                    text: message,
+                    userName: userName,
+                    userId: userId,
+                    createdAt: new Date(),
+                });
 
-            setMessage('');
+                setMessage('');
+            } catch (e) {
+                console.log(e);
+            }
         }
     };
 
-    const loadMoreMessages = async () => {
-        if (isLoadingMore) {
-          return;
-        }
-      
-        setIsLoadingMore(true);
-      
-        const q = query(
-          messageRef,
-          orderBy('timestamp', 'desc'),
-          lastLoadedMessageTimestamp ? startAfter(lastLoadedMessageTimestamp) : null
-        );
-      
-        console.log('Loading more messages'); // Add this line to see if the function is being called
-      
-        const unsubscribe = onSnapshot(q, (querySnapshot) => {
-          const newMessages = [];
-          querySnapshot.forEach((doc) => {
-            const message = doc.data();
-            newMessages.unshift({
-              id: doc.id,
-              text: message.text,
-              timestamp: serverTimestamp(),
-              userId: message.userId,
-              userName: message.userName,
-            });
-          });
-          setMessages((prevMessages) => [...newMessages, ...prevMessages]);
-          setLastLoadedMessageTimestamp(newMessages[newMessages.length - 1]?.timestamp);
-          setIsLoadingMore(false);
-        });
-      
-        return () => unsubscribe();
-      };
+    const retrieveMore = async () => {
+        try {
+            const lastMessage = messages[messages.length - 1];
+            if (!lastMessage) {
+                return;
+            }
+            const lastMessageTimestamp = lastMessage.createdAt;
+            const nextMessagesQuery = query(
+                collection(db, 'dennis-yazen-messages'),
+                orderBy('createdAt', 'desc'),
+                startAfter(lastMessageTimestamp),
+                limit(10)
+            );
+            setIsLoadingMore(true);
+            const unsubscribe  = await onSnapshot(nextMessagesQuery, (querySnapshot) => {
+                const newMessages = [];
+                querySnapshot.forEach((doc) => {
+                    const message = doc.data();
+                    newMessages.push({
+                        id: doc.id,
+                        text: message.text,
+                        userId: message.userId,
+                        userName: message.userName,
+                        createdAt: message.createdAt
+                    });
+                });
+                setMessages((previousMessages) => [...previousMessages, ...newMessages]);
+                setIsLoadingMore(false);
+                setLastLoadedMessageTimestamp(newMessages[querySnapshot.docs.length - 1]?.createdAt);
+                
 
-    useEffect(() => {
-        if (messages.length > 0) {
-            flatListRef.current.scrollToIndex({ index: messages.length - 1 });
+                return () => unsubscribe()
+            });
+        } catch (e) {
+            console.log("No messages to retrieve: ", e);
         }
-    }, [messages]);
+    };
+
+    /* useEffect(() => {
+        // Scroll to bottom when sending new message
+        flatListRef.current?.scrollToOffset({
+            offset: messages.length,
+        })
+    }, [messages]); */
 
     const renderItem = ({ item }) => {
         return (
-        <View style={[
-            styles.messageContainer,
-            item.userId === userId ? styles.sentMessage : styles.receivedMessage,
-        ]}>
-            <Text style={styles.messageAuthor}>{item.userName}</Text>
-            <Text style={styles.messageText}>{item.text}</Text>
-        </View>
+            <View style={[
+                styles.messageContainer,
+                item.userId === userId ? styles.sentMessage : styles.receivedMessage,
+            ]}>
+                <Text style={styles.messageAuthor}>{item.userName}</Text>
+                <Text style={styles.messageText}>{item.text}</Text>
+            </View>
         )
     };
 
@@ -122,18 +133,10 @@ const ChatRoom = ({ route }) => {
                     data={messages}
                     renderItem={renderItem}
                     keyExtractor={(item, index) => item.id + index}
-                    onScroll={e => {
-                        const scrolledToTop = e.nativeEvent.contentOffset.y === 0;
-                        if (scrolledToTop) {
-                            loadMoreMessages();
-                        }
-                    }}
+                    onEndReached={retrieveMore}
+                    inverted
                     onEndReachedThreshold={0.1}
-                    onScrollToIndexFailed={
-                        () => console.log("WARNING")
-                    }
-
-                    ListHeaderComponent={
+                    ListFooterComponent={
                         isLoadingMore ?
                             <ActivityIndicator size="large" color="#FF581E" />
                             :
