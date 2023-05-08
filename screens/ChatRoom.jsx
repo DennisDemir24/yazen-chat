@@ -173,6 +173,7 @@ const styles = StyleSheet.create({
         color: '#fff',
         fontSize: 20,
         fontWeight: 'bold',
+        textAlign: 'center',
     },
     footer: {
         backgroundColor: '#fff',
@@ -223,7 +224,7 @@ const styles = StyleSheet.create({
         padding: 10,
         borderRadius: 10,
         maxWidth: '80%',
-        marginVertical: 5
+        marginVertical: 5,
     },
     sentMessage: {
         alignSelf: 'flex-end',

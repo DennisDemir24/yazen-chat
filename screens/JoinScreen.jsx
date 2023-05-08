@@ -10,7 +10,7 @@ const JoinScreen = ({ navigation }) => {
 
     return (
         <View style={styles.container}>
-            <Text style={styles.title}>Join the Chat</Text>
+            <Text style={styles.title}>Join the Chatroom</Text>
             <TextInput style={styles.nameInput} placeholder="Enter your name" onChangeText={(userName) => setUserName(userName)} value={userName} />
             <TouchableOpacity style={styles.joinButton} onPress={onPressJoin}>
                 <Text style={styles.buttonText}>Join</Text>

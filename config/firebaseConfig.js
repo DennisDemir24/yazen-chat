@@ -3,15 +3,16 @@ import { initializeApp } from "firebase/app";
 import { getFirestore } from "firebase/firestore";
 // TODO: Add SDKs for Firebase products that you want to use
 // https://firebase.google.com/docs/web/setup#available-libraries
+import Constants from 'expo-constants';
 
 // Your web app's Firebase configuration
 const firebaseConfig = {
-  apiKey: "AIzaSyC9ISaUvBm8jTMGmEWTZYq0i0-8NTu179Y",
-  authDomain: "mymoney-14f10.firebaseapp.com",
-  projectId: "mymoney-14f10",
-  storageBucket: "mymoney-14f10.appspot.com",
-  messagingSenderId: "313856507003",
-  appId: "1:313856507003:web:b74d458a684e22b28bf6de"
+  apiKey: Constants.manifest.extra.apiKey,
+  authDomain: Constants.manifest.extra.authDomain,
+  projectId: Constants.manifest.extra.projectId,
+  storageBucket: Constants.manifest.extra.storageBucket,
+  messagingSenderId: Constants.manifest.extra.messagingSenderId,
+  appId: Constants.manifest.extra.appId,
 };
 
 // Initialize Firebase
